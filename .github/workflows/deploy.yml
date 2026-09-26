@@ -32,7 +32,7 @@ jobs:
           gr() { ssh -i ~/.ssh/deploy "gr-$SLUG@gr.lab.ayty.org" gr-docker "$@"; }
           P="gr-$SLUG"
           for c in front api banco; do
-            if gr container inspect "$P-$c" >/dev/null 2>&1; then
+            if gr inspect "$P-$c" >/dev/null 2>&1; then
               gr rm -f "$P-$c"
               echo "container $c removido"
             else
