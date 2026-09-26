@@ -9,9 +9,10 @@ on:
 
 env:
   # TODO: troque pelo seu slug, o começo do seu e-mail com ponto virando hífen.
-  SLUG: SEU-SLUG
+  SLUG: whendel-silva
   # TODO: a primeira porta da sua faixa. Veja em `gr-docker ajuda`.
-  PORTA: 230N0
+  PORTA: 23310
+  DB_SENHA: ${{ secrets.DB_SENHA }}
 
 jobs:
   deploy:
@@ -28,24 +29,70 @@ jobs:
 
       - name: Derrubar a topologia antiga
         run: |
-          # TODO: apague os três containers, se existirem.
-          # Dica: o passo não pode falhar quando eles ainda não existem.
-          echo "TODO"
+          gr() { ssh -i ~/.ssh/deploy "gr-$SLUG@gr.lab.ayty.org" gr-docker "$@"; }
+          P="gr-$SLUG"
+          for c in front api banco; do
+            if gr container inspect "$P-$c" >/dev/null 2>&1; then
+              gr rm -f "$P-$c"
+              echo "container $c removido"
+            else
+              echo "container $c ainda não existe, seguindo"
+            fi
+          done
 
       - name: Criar rede e volume
         run: |
-          # TODO: as duas redes e o volume. A rede do banco é interna.
-          # Dica: criar o que já existe devolve erro. Trate isso.
-          echo "TODO"
+          gr() { ssh -i ~/.ssh/deploy "gr-$SLUG@gr.lab.ayty.org" gr-docker "$@"; }
+          P="gr-$SLUG"
+          
+          if gr volume inspect "$P-pgdata" >/dev/null 2>&1; then
+            echo "volume pgdata já existe, seguindo"
+          else
+            gr volume create pgdata
+            echo "volume pgdata criado"
+          fi
+          
+          if gr network inspect "$P-dados" >/dev/null 2>&1; then
+            echo "rede dados já existe, seguindo"
+          else
+            gr network create --internal dados
+            echo "rede dados criada"
+          fi
+          
+          if gr network inspect "$P-web" >/dev/null 2>&1; then
+            echo "rede web já existe, seguindo"
+          else
+            gr network create web
+            echo "rede web criada"
+          fi
 
       - name: Subir banco, API e front
         run: |
-          # TODO: os três containers, na ordem certa.
-          # O front precisa receber o commit que o deploy publicou:
-          #   -e DEPLOY_SHA=${{ github.sha }}
-          echo "TODO"
+          gr() { ssh -i ~/.ssh/deploy "gr-$SLUG@gr.lab.ayty.org" gr-docker "$@"; }
+          P="gr-$SLUG"
+          
+          gr run -d --name banco --network "$P-dados" -v "$P-pgdata":/var/lib/postgresql/data -e POSTGRES_DB=pokedex -e POSTGRES_PASSWORD="$DB_SENHA" postgres:17-alpine
+          gr run -d --name api --network "$P-dados" -e POSTGRES_HOST="$P-banco" -e POSTGRES_DB=pokedex -e POSTGRES_PASSWORD="$DB_SENHA" gr-atv2-api:1
+          
+          gr network connect "$P-web" "$P-api"
+          
+          gr run -d --name front --network "$P-web" -p "$PORTA":80 -e API="$P-api" -e DEPLOY_SHA=${{ github.sha }} gr-atv2-front:1
 
       - name: Conferir que subiu
         run: |
-          # TODO: pergunte ao servidor se a listagem responde.
-          echo "TODO"
+          gr() { ssh -i ~/.ssh/deploy "gr-$SLUG@gr.lab.ayty.org" gr-docker "$@"; }
+          P="gr-$SLUG"
+          URL="http://gr.lab.ayty.org:$PORTA/api/pokemons"
+
+          for i in $(seq 1 10); do
+            if curl -fsS "$URL" >/dev/null; then
+              echo "listagem respondeu na tentativa $i"
+              exit 0
+            fi
+            echo "tentativa $i falhou, esperando 3s..."
+            sleep 3
+          done
+
+          echo "listagem não respondeu. Últimas linhas do log da API:"
+          gr logs "$P-api" | tail -n 30
+          exit 1
