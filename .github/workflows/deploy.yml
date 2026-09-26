@@ -30,15 +30,30 @@ jobs:
       - name: Derrubar a topologia antiga
         run: |
           gr() { ssh -i ~/.ssh/deploy "gr-$SLUG@gr.lab.ayty.org" gr-docker "$@"; }
-          P="gr-$SLUG"
-          for c in front api banco; do
-            if gr inspect $c >/dev/null 2>&1; then
-              gr rm -f $c
-              echo "container $c removido"
-            else
-              echo "container $c ainda não existe, seguindo"
-            fi
-          done
+
+          if gr inspect gr-whendel-silva-front >/dev/null 2>&1; then
+            gr stop gr-whendel-silva-front
+            gr rm gr-whendel-silva-front
+            echo "container front removido"
+          else
+            echo "container front ainda não existe, seguindo"
+          fi
+
+          if gr inspect gr-whendel-silva-api >/dev/null 2>&1; then
+            gr stop gr-whendel-silva-api
+            gr rm gr-whendel-silva-api
+            echo "container api removido"
+          else
+            echo "container api ainda não existe, seguindo"
+          fi
+
+          if gr inspect gr-whendel-silva-banco >/dev/null 2>&1; then
+            gr stop gr-whendel-silva-banco
+            gr rm gr-whendel-silva-banco
+            echo "container banco removido"
+          else
+            echo "container banco ainda não existe, seguindo"
+          fi
 
       - name: Criar rede e volume
         run: |
